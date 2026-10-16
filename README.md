@@ -132,7 +132,7 @@ distribute or pin — the identity policy _is_ the verification.
 go install github.com/sigstore/cosign/v3/cmd/cosign@latest
 gh auth login   # gh attestation verify reads GitHub's API
 
-tag=v0.2.0
+tag="$(gh release view --repo soroauth/soroauth-go --json tagName --jq .tagName)"
 gh release download "$tag" --repo soroauth/soroauth-go --dir release-assets
 cd release-assets
 
@@ -686,7 +686,7 @@ soroauth --version
 ```
 
 ```
-soroauth v0.2.0
+soroauth <release-tag>
 commit: 9f1c3ab
 built: 2026-09-28T11:04:02Z
 go: go1.25.4
@@ -785,16 +785,18 @@ that runs on version tags (`v*`). It:
 To cut a release:
 
 ```sh
-# Update CHANGELOG.md with the new version's entries
-git tag v0.2.0
-git push origin v0.2.0
+# Update the changelog, current-version status lines, CITATION.cff, the OpenAPI
+# example, and both the wasm package and wallet example dependency to match.
+tag=vX.Y.Z
+git tag "$tag"
+git push origin "$tag"
 ```
 
-The workflow will refuse to publish if the golden drift check fails, so a
-release is only created when the library is provably byte-identical to the
-reference implementation. It is only green when the release it just published
-verifies, so a release whose signatures or attestations are broken stays red
-rather than being announced.
+The release preflight blocks publication unless the changelog, documented
+release versions, and reproducible vectors match the tag, and every workflow's
+latest conclusion on the tagged commit is successful. The release is only green
+when the artifacts it just published verify, so a release whose signatures or
+attestations are broken stays red rather than being announced.
 
 ## Quickstart
 
