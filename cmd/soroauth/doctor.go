@@ -17,11 +17,14 @@ import (
 const doctorUsage = `soroauth doctor — check the local environment for common first-run problems.
 
 usage:
-  soroauth doctor [--rpc-url <url>] [--secret-env <VAR>] [--timeout <duration>] [--json]
+  soroauth doctor [--config <path>] [--network <name|passphrase>] [--rpc-url <url>] \
+                  [--secret-env <VAR>] [--format text|json] [--timeout <duration>] [--json]
 
 Most first-run failures are environmental rather than something wrong with an
 entry or a key, and the error from "sign" or "payload" does not say so. This
-runs a small set of checks and reports each as pass or fail:
+reports which configuration file was loaded and which setting came from which
+precedence layer (flag, env, file, or default), then runs a small set of checks
+and reports each as pass or fail:
 
   go toolchain    the "go" binary on PATH is at least the version this module
                   requires (see go.mod), needed to build or update soroauth
@@ -30,20 +33,21 @@ runs a small set of checks and reports each as pass or fail:
                   (default: https://soroban-testnet.stellar.org). Any HTTP
                   response counts as reachable; only a transport-level
                   failure (DNS, connection refused, timeout) does not
-  secret env var  only checked when --secret-env is given: whether the named
-                  environment variable is set to a non-empty value
+  secret env var  only checked when --secret-env (or secret_env in config/env)
+                  is given: whether the named environment variable is set to a
+                  non-empty value
 
 Nothing here ever inspects or prints a secret's value, only whether it is set.
 
-With --json, prints one JSON object: "checks" (one entry per check, each with
-"name", "pass" and an optional "detail") and an overall "ok" field. A failed
-check also carries the versioned machine-readable error fields documented in
-README.md.
+With --json (or --format json), prints one JSON object: "config" (which file was
+loaded and each setting's resolved value and source), "checks" (one entry per
+check, each with "name", "pass" and an optional "detail") and an overall "ok"
+field. Nothing else is written to stdout in JSON mode.
 
 exit codes:
   0  every check passed
   1  at least one check failed
-  2  usage error (invalid flags)
+  2  usage error (invalid flags or unparseable config file)
 `
 
 // goVersionFloor is the minimum toolchain version this module's go.mod
@@ -63,14 +67,9 @@ type doctorCheck struct {
 // doctorReport is the full result of a doctor run, and the shape of its JSON
 // output.
 type doctorReport struct {
-	Checks        []doctorCheck `json:"checks"`
-	OK            bool          `json:"ok"`
-	Error         string        `json:"error,omitempty"`
-	SchemaVersion int           `json:"schema_version,omitempty"`
-	Code          string        `json:"code,omitempty"`
-	Message       string        `json:"message,omitempty"`
-	Field         string        `json:"field,omitempty"`
-	ExitCode      int           `json:"exit_code,omitempty"`
+	Config doctorConfigReport `json:"config"`
+	Checks []doctorCheck      `json:"checks"`
+	OK     bool               `json:"ok"`
 }
 
 func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) string) error {
@@ -82,8 +81,11 @@ func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) stri
 		flags.PrintDefaults()
 	}
 
+	configFlag := flags.String("config", "", "path to CLI configuration file (default $SOROAUTH_CONFIG or ~/.config/soroauth/config.json)")
+	networkFlag := flags.String("network", "", "testnet, futurenet, public, or a literal network passphrase")
 	rpcURL := flags.String("rpc-url", "https://soroban-testnet.stellar.org", "URL to check network reachability against")
 	secretEnv := flags.String("secret-env", "", "name of an environment variable whose presence (not value) to check")
+	formatFlag := flags.String("format", "text", "output format: text or json")
 	timeout := flags.Duration("timeout", 5*time.Second, "timeout for the network check")
 	jsonFlag := flags.Bool("json", false, "output as JSON")
 
@@ -91,12 +93,43 @@ func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) stri
 		return writeJSONError(stdout, *jsonFlag, newErrorf(ExitUsageError, "%w", err))
 	}
 
+	set := visitedFlags(flags)
+	cfg, err := loadConfig(*configFlag, getenv)
+	if err != nil {
+		return writeJSONError(stdout, *jsonFlag, err)
+	}
+
+	netRes := resolveNetworkValue(set, *networkFlag, getenv, cfg)
+	rpcRes := resolveRPCURLValue(set, *rpcURL, getenv, cfg, "https://soroban-testnet.stellar.org")
+	secRes := resolveSecretEnvValue(set, *secretEnv, getenv, cfg)
+	fmtRes, err := resolveFormatValue(set, *formatFlag, *jsonFlag, getenv, cfg, "text")
+	if err != nil {
+		return writeJSONError(stdout, *jsonFlag, err)
+	}
+	if fmtRes.Value != "text" && fmtRes.Value != "json" {
+		if set["format"] {
+			return writeJSONError(stdout, *jsonFlag,
+				newErrorf(ExitUsageError, "--format for doctor must be text or json, got %q", fmtRes.Value))
+		}
+		fmtRes.Value = "text"
+	}
+	jsonMode := fmtRes.Value == "json"
+
+	cfgReport := doctorConfigReport{
+		File:      cfg.Path,
+		Loaded:    cfg.Loaded,
+		Network:   netRes,
+		RPCURL:    rpcRes,
+		SecretEnv: secRes,
+		Format:    fmtRes,
+	}
+
 	checks := []doctorCheck{
 		checkGoToolchain(),
-		checkNetwork(*rpcURL, *timeout),
+		checkNetwork(rpcRes.Value, *timeout),
 	}
-	if *secretEnv != "" {
-		checks = append(checks, checkSecretEnv(*secretEnv, getenv))
+	if secRes.Value != "" {
+		checks = append(checks, checkSecretEnv(secRes.Value, getenv))
 	}
 
 	ok := true
@@ -105,32 +138,9 @@ func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) stri
 			ok = false
 		}
 	}
-	report := doctorReport{Checks: checks, OK: ok}
+	report := doctorReport{Config: cfgReport, Checks: checks, OK: ok}
 
-	if *jsonFlag {
-		if !ok {
-			fields := machineError(newErrorf(ExitGeneralError, "one or more doctor checks failed"))
-			fields.Code = "doctor_check_failed"
-			fields.Message = "one or more doctor checks failed"
-			for _, check := range checks {
-				if check.Pass {
-					continue
-				}
-				switch {
-				case check.Name == "network":
-					fields.Field = "--rpc-url"
-				case strings.HasPrefix(check.Name, "secret env:"):
-					fields.Field = "--secret-env"
-				}
-				break
-			}
-			report.Error = fields.Message
-			report.SchemaVersion = fields.SchemaVersion
-			report.Code = fields.Code
-			report.Message = fields.Message
-			report.Field = fields.Field
-			report.ExitCode = fields.ExitCode
-		}
+	if jsonMode {
 		enc := json.NewEncoder(stdout)
 		enc.SetEscapeHTML(false)
 		if err := enc.Encode(report); err != nil {
@@ -144,6 +154,16 @@ func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) stri
 		}
 		return nil
 	}
+
+	if cfgReport.Loaded {
+		fmt.Fprintf(stdout, "config file:     %s (loaded)\n", cfgReport.File)
+	} else {
+		fmt.Fprintln(stdout, "config file:     none (not loaded)")
+	}
+	fmt.Fprintf(stdout, "network:         %s (source: %s)\n", displayResolved(cfgReport.Network.Value), cfgReport.Network.Source)
+	fmt.Fprintf(stdout, "rpc-url:         %s (source: %s)\n", displayResolved(cfgReport.RPCURL.Value), cfgReport.RPCURL.Source)
+	fmt.Fprintf(stdout, "secret-env:      %s (source: %s)\n", displayResolved(cfgReport.SecretEnv.Value), cfgReport.SecretEnv.Source)
+	fmt.Fprintf(stdout, "format:          %s (source: %s)\n", displayResolved(cfgReport.Format.Value), cfgReport.Format.Source)
 
 	for _, c := range checks {
 		status := "FAIL"
@@ -162,6 +182,13 @@ func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) stri
 	}
 	fmt.Fprintln(stdout, "one or more checks failed")
 	return newErrorf(ExitGeneralError, "one or more doctor checks failed")
+}
+
+func displayResolved(val string) string {
+	if val == "" {
+		return "(unset)"
+	}
+	return val
 }
 
 // checkGoToolchain reports whether the "go" binary on PATH meets

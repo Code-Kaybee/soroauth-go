@@ -1,6 +1,7 @@
 # soroauth
 
 [![ci](https://github.com/soroauth/soroauth-go/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/soroauth/soroauth-go/actions/workflows/ci.yml)
+[![go-stellar-sdk@main](https://github.com/soroauth/soroauth-go/actions/workflows/ci-sdk-main.yml/badge.svg?branch=main)](https://github.com/soroauth/soroauth-go/actions/workflows/ci-sdk-main.yml)
 [![Go reference](https://pkg.go.dev/badge/github.com/soroauth/soroauth-go.svg)](https://pkg.go.dev/github.com/soroauth/soroauth-go)
 [![Go report card](https://goreportcard.com/badge/github.com/soroauth/soroauth-go)](https://goreportcard.com/report/github.com/soroauth/soroauth-go)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
@@ -239,150 +240,25 @@ fails a run instead of going unnoticed.
 Every subcommand that produces output accepts `--json` to emit a single JSON
 object (or, for `tree`, either the JSON report or one of its two text renderings
 — see below) on stdout. On success the object carries the result fields; on
-failure it carries a versioned error schema. Nothing else is written to stdout
-in JSON mode, so scripts can safely pipe the output to `jq` without stripping
-usage text. `tui` is the one exception: it is an interactive terminal program,
-not something a script drives, so it has no `--json` mode.
+failure it carries an `error` field. Nothing else is written to stdout in JSON
+mode, so scripts can safely pipe the output to `jq` without stripping usage
+text. `tui` is the one exception: it is an interactive terminal program, not
+something a script drives, so it has no `--json` mode.
 
-| subcommand      | success fields                                                                                                                   | failure field                              |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `payload`       | `preimage`, `payload`                                                                                                            | `error`                                    |
-| `sign`          | `signed_entry`                                                                                                                   | `error`                                    |
-| `delegates`     | `wrapped_entry`                                                                                                                  | `error`                                    |
-| `inspect`       | (the `EntryInfo` struct — this was already `inspect`'s only output; `--json` is accepted for consistency and does not change it) | `error`                                    |
-| `verify`        | the report: `credential_type`, `address`, `valid_until_ledger`, `verified`, and `nodes` with a `verdict` per credential node     | `error`                                    |
-| `tree`          | (the `EntryInfo` struct, same shape as `inspect`; without `--json` it prints an ASCII or DOT rendering instead)                  | `error`                                    |
-| `doctor`        | `checks`, `ok`                                                                                                                   | structured error fields when a check fails |
-| `cross-compile` | `target`, `size`, `sha256` (one per line)                                                                                        | `error`                                    |
-| `completions`   | `shell`, `script`                                                                                                                | `error`                                    |
-| `man`           | `format`, `page`                                                                                                                 | `error`                                    |
-
-### Machine-readable errors
-
-With `--json`, a failed command emits `schema_version`, `code`, `message`,
-`field` and `exit_code` alongside the compatibility `error` string. The schema
-version is `1`; `error` is the same safe, stable text as `message`. For batch
-commands these fields accompany each failed entry in the result array. The
-numeric `exit_code` equals the process exit status for a single failure, or the
-first failed entry in batch mode. `field` is the input flag when one is
-identifiable and an empty string for command-level failures. Messages never
-include an entry, a secret, or a key.
-
-Codes for library sentinel errors are explicit and stable:
-
-| Sentinel                                | Code                                    |
-| --------------------------------------- | --------------------------------------- |
-| `ErrSourceAccountCredentials`           | `source_account_credentials`            |
-| `ErrUnsupportedCredentials`             | `unsupported_credentials`               |
-| `ErrNoMatchingCredentialNode`           | `no_matching_credential_node`           |
-| `ErrDuplicateDelegate`                  | `duplicate_delegate`                    |
-| `ErrSignatureMismatch`                  | `signature_mismatch`                    |
-| `ErrMissingSigner`                      | `missing_signer`                        |
-| `ErrAlreadySigned`                      | `already_signed`                        |
-| `ErrInvalidExpiration`                  | `invalid_expiration`                    |
-| `ErrTooManySignatures`                  | `too_many_signatures`                   |
-| `ErrDecodeLimit`                        | `decode_limit`                          |
-| `ErrNoInvokeOperation`                  | `no_invoke_operation`                   |
-| `ErrUnsupportedEnvelope`                | `unsupported_envelope`                  |
-| `ErrUnsignedCredentialNode`             | `unsigned_credential_node`              |
-| `ErrDelegatePlanUnmatched`              | `delegate_plan_unmatched`               |
-| `ErrNonceAlreadyReserved`               | `nonce_already_reserved`                |
-| `ErrWebAuthnMalformedJSON`              | `webauthn_malformed_json`               |
-| `ErrWebAuthnMissingField`               | `webauthn_missing_field`                |
-| `ErrWebAuthnMalformedField`             | `webauthn_malformed_field`              |
-| `ErrWebAuthnTruncatedAuthenticatorData` | `webauthn_truncated_authenticator_data` |
-| `ErrWebAuthnChallengeMismatch`          | `webauthn_challenge_mismatch`           |
-| `ErrSignerAddressMismatch`              | `signer_address_mismatch`               |
-| `ErrVaultUnauthorized`                  | `vault_unauthorized`                    |
-| `ErrVaultKeyNotFound`                   | `vault_key_not_found`                   |
-| `ErrVaultKeyType`                       | `vault_key_type`                        |
-| `ErrLedgerUnavailable`                  | `ledger_unavailable`                    |
-| `ErrLedgerLocked`                       | `ledger_locked`                         |
-| `ErrLedgerWrongApp`                     | `ledger_wrong_app`                      |
-| `ErrLedgerBlindSigningDisabled`         | `ledger_blind_signing_disabled`         |
-| `ErrLedgerDenied`                       | `ledger_denied`                         |
-
-Errors without a sentinel use `usage_error`, `signing_refused`,
-`verification_failed` or `command_failed`, matching the CLI exit-code class. An
-unsuccessful `doctor` report uses `doctor_check_failed` and exit code `1`. For
-example:
-
-```json
-{"schema_version":1,"code":"invalid_expiration","message":"invalid signature expiration ledger","field":"--valid-until","exit_code":4,"error":"invalid signature expiration ledger"}
-```
-
-The flag reference below is generated from the CLI command specifications. The
-test suite fails if it drifts from the flags the subcommands parse.
-
-<!-- BEGIN GENERATED CLI FLAGS -->
-
-| Command       | Flag             | Value   | Description                                                                                           |
-| ------------- | ---------------- | ------- | ----------------------------------------------------------------------------------------------------- |
-| payload       | --entry          | <value> | authorization entry or transaction envelope, as base64 XDR                                            |
-| payload       | --valid-until    | <value> | the last ledger at which the signature is valid                                                       |
-| payload       | --valid-for      | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
-| payload       | --rpc-url        | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
-| payload       | --network        | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
-| payload       | --json           | —       | output as JSON                                                                                        |
-| sign          | --entry          | <value> | authorization entry or transaction envelope, as base64 XDR                                            |
-| sign          | --entries        | <value> | a file of entries to sign, one base64 entry per line, or - for stdin                                  |
-| sign          | --valid-until    | <value> | the last ledger at which the signature is valid                                                       |
-| sign          | --valid-for      | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
-| sign          | --rpc-url        | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
-| sign          | --network        | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
-| sign          | --secret-env     | <value> | name of the environment variable holding the seed                                                     |
-| sign          | --assertion      | <value> | path to a WebAuthn assertion JSON file, or - for stdin                                                |
-| sign          | --for            | <value> | credential node to sign, when it is not the signer's own address                                      |
-| sign          | --json           | —       | output as JSON                                                                                        |
-| delegates     | --entry          | <value> | the authorization entry, as base64 XDR                                                                |
-| delegates     | --valid-until    | <value> | the last ledger at which the signatures are valid                                                     |
-| delegates     | --valid-for      | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
-| delegates     | --rpc-url        | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
-| delegates     | --delegate       | <value> | a delegate address; repeat for several                                                                |
-| delegates     | --nested-json    | <value> | JSON string defining nested delegate tree                                                             |
-| delegates     | --json           | —       | output as JSON                                                                                        |
-| inspect       | --entry          | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
-| inspect       | --entries        | <value> | a file of entries to inspect, one base64 entry per line, or - for stdin                               |
-| inspect       | --json           | —       | accepted for consistency; inspect's output is always JSON                                             |
-| tree          | --entry          | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
-| tree          | --format         | <value> | tree rendering: ascii or dot                                                                          |
-| tree          | --json           | —       | output structured JSON instead of a rendering                                                         |
-| tui           | --entry          | <value> | base64-encoded authorization entry (required)                                                         |
-| tui           | --valid-until    | <value> | signature expiration ledger (required)                                                                |
-| tui           | --network        | <value> | testnet, futurenet, public, or a literal passphrase (required)                                        |
-| tui           | --secret-env     | <value> | name of environment variable holding the secret seed (required)                                       |
-| tui           | --for            | <value> | target address to sign for (optional)                                                                 |
-| doctor        | --rpc-url        | <value> | URL to check network reachability against                                                             |
-| doctor        | --secret-env     | <value> | name of an environment variable whose presence to check                                               |
-| doctor        | --timeout        | <value> | timeout for the network check                                                                         |
-| doctor        | --json           | —       | output as JSON                                                                                        |
-| cross-compile | --json           | —       | emit results as JSON (one object per line)                                                            |
-| cross-compile | --targets        | <value> | comma-separated GOOS/GOARCH pairs (default: all)                                                      |
-| cross-compile | --output-dir     | <value> | directory to write binaries (default: stdout only)                                                    |
-| verify        | --entry          | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
-| verify        | --entries        | <value> | a file of entries to verify, one base64 entry per line, or - for stdin                                |
-| verify        | --network        | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
-| verify        | --valid-until    | <value> | assert the expiration the entry carries (optional)                                                    |
-| verify        | --allow-unsigned | —       | accept unsigned nodes (a Void top-level node of a delegates entry is legitimate under CAP-71-01)      |
-| verify        | --json           | —       | output as JSON                                                                                        |
-| diff          | --before         | <value> | the first authorization entry, as base64 XDR                                                          |
-| diff          | --after          | <value> | the second authorization entry, as base64 XDR                                                         |
-| diff          | --before-entries | <value> | a file of entries to compare, one base64 entry per line, or - for stdin; paired with --after-entries  |
-| diff          | --after-entries  | <value> | a file of entries to compare, one base64 entry per line, or - for stdin; paired with --before-entries |
-| diff          | --json           | —       | output as JSON                                                                                        |
-| completions   | --shell          | <value> | which shell: bash, zsh, or fish                                                                       |
-| completions   | --json           | —       | output as JSON                                                                                        |
-| man           | --out            | <value> | write the page to this path instead of stdout                                                         |
-| man           | --json           | —       | output as JSON                                                                                        |
-| wasm-budget   | --out            | <value> | path to the wasm artifact to measure                                                                  |
-| wasm-budget   | --budget         | <value> | maximum allowed size in bytes                                                                         |
-| wasm-budget   | --prev-size      | <value> | previous release's size, for a delta                                                                  |
-| wasm-budget   | --build-cmd      | <value> | command to build the artifact before measuring                                                        |
-| wasm-budget   | --json           | —       | output the result as JSON                                                                             |
-| soroauth      | --help           | —       | Print this help                                                                                       |
-| soroauth      | --version        | —       | Print the build version, commit and Go version                                                        |
-
-<!-- END GENERATED CLI FLAGS -->
+| subcommand      | success fields                                                                                                                              | failure field                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `payload`       | `preimage`, `payload`                                                                                                                       | `error`                                             |
+| `sign`          | `signed_entry`                                                                                                                              | `error`                                             |
+| `simulate`      | `entries` (with `operation_index`, `entry_index`, `arm`, `entry` each), `min_resource_fee`, `transaction_data`, `latest_ledger`, `envelope` | `error`                                             |
+| `submit`        | `hash`, `status`, `ledger`, `arm` (plus `result_xdr` and `diagnostic_events` when the transaction failed)                                   | `error`                                             |
+| `delegates`     | `wrapped_entry`                                                                                                                             | `error`                                             |
+| `inspect`       | (the `EntryInfo` struct — this was already `inspect`'s only output; `--json` is accepted for consistency and does not change it)            | `error`                                             |
+| `verify`        | the report: `credential_type`, `address`, `valid_until_ledger`, `verified`, and `nodes` with a `verdict` per credential node                | `error`                                             |
+| `tree`          | (the `EntryInfo` struct, same shape as `inspect`; without `--json` it prints an ASCII or DOT rendering instead)                             | `error`                                             |
+| `doctor`        | `checks`, `ok`                                                                                                                              | (checks carry their own `pass`/`detail`; see below) |
+| `cross-compile` | `target`, `size`, `sha256` (one per line)                                                                                                   | `error`                                             |
+| `completions`   | `shell`, `script`                                                                                                                           | `error`                                             |
+| `man`           | `format`, `page`                                                                                                                            | `error`                                             |
 
 ### Worked invocation — JSON output
 
@@ -412,6 +288,55 @@ SEED=SABC... ./soroauth sign \
 ./soroauth inspect --entry <base64> |
   jq -r '"\(.credential_type) \(.address) expires=\(.valid_until_ledger)"'
 ```
+
+### Simulate and submit — from a simulated transaction to a landed one
+
+`payload`, `sign`, `inspect` and the rest work on an entry somebody already has.
+`simulate` and `submit` are the two ends that produce one and send it.
+
+`simulate` runs the record pass: it takes a transaction envelope, asks the host
+which addresses must authorize the call, and prints every entry the host
+recorded with its operation index, entry index and credential arm. The arm is
+reported as the host recorded it, not as the caller asked for it, because
+`--use-upgraded-auth` is best-effort. It also prints — and carries in its JSON
+as `envelope` — the input envelope with the recorded entries attached, which is
+the thing the next step needs: signing a bare entry produces a bare entry, and
+getting it back into a transaction by hand is the part of the two-pass flow
+people get wrong.
+
+`submit` takes that envelope back, runs the enforcing pass so the resource fee
+covers the signatures, signs the envelope with the seed named by `--secret-env`
+(never a flag value), sends it, and polls to a terminal state. The transaction
+hash is printed the moment the RPC accepts it and before the poll, so a poll
+that times out still leaves something to look up.
+
+```sh
+export SOROAUTH_RPC_URL='https://soroban-testnet.stellar.org'
+
+# 1. Record: which addresses must authorize this call?
+soroauth simulate --entry unsigned-tx.b64 --json | tee recorded.json
+
+# 2. Sign the entries. The authorizer's seed, not the payer's.
+SEED_AUTHORIZER=SABC... soroauth sign \
+  --entry "$(jq -r .envelope recorded.json)" \
+  --valid-until 1234567 --network testnet --secret-env SEED_AUTHORIZER \
+  --for GAAAA... > signed-tx.b64
+
+# 3. Enforce, sign the envelope as the payer, send and poll.
+SEED_PAYER=SABC... soroauth submit \
+  --entry signed-tx.b64 --network testnet --secret-env SEED_PAYER
+```
+
+`submit` refuses to send a transaction whose address entries are unsigned — the
+host would refuse it on-chain and the fee would be spent anyway — naming the
+address that is missing a signature. `--allow-unsigned` overrides that for the
+one case this tool cannot judge: a custom account deciding its own signature
+shape. A delegates entry's Void top-level node is not a refusal, because
+CAP-71-01 permits it when every delegate authenticates.
+
+Neither subcommand signs the entries for you, and neither picks an endpoint:
+`--rpc-url` or `$SOROAUTH_RPC_URL` is required, because a simulation or a
+submission is about to authorize value on a specific chain.
 
 ### Batch mode — many entries in one run
 
@@ -571,7 +496,8 @@ Most first-run problems are environmental — an unreachable RPC endpoint, a
 mistyped secret variable name, a Go toolchain older than this module needs — and
 the error from `sign` or `payload` does not say so. `doctor` checks three things
 and reports each as pass or fail: never printing a secret, only whether it is
-set.
+set. It also reports which configuration file was loaded and which precedence
+layer (`flag`, `env`, `file`, or `default`) supplied each resolved setting.
 
 ```sh
 # Human-readable
@@ -582,7 +508,7 @@ set.
 ```
 
 ```json
-{"checks":[{"name":"go toolchain","pass":true,"detail":"go1.25.4"},{"name":"network","pass":true,"detail":"https://soroban-testnet.stellar.org reachable (HTTP 405)"},{"name":"secret env: SEED","pass":true,"detail":"SEED is set"}],"ok":true}
+{"checks":[{"name":"go toolchain","pass":true,"detail":"go1.25.4"},{"name":"network","pass":true,"detail":"https://soroban-testnet.stellar.org reachable (HTTP 405)"},{"name":"secret env: SEED","pass":true,"detail":"SEED is set"}],"config":{"file_source":"none","values":[{"key":"network","value":"","source":"default"},{"key":"rpc_url","value":"https://soroban-testnet.stellar.org","source":"flag"},{"key":"secret_env","value":"SEED","source":"flag"},{"key":"format","value":"","source":"default"}]},"ok":true}
 ```
 
 `--secret-env` is optional; when omitted, that check is skipped rather than
@@ -591,6 +517,61 @@ HTTP response — including a non-2xx status — counts the network check as
 passing, since it proves DNS, TCP and TLS all worked; only a transport-level
 error (DNS failure, connection refused, timeout) fails it. Exit code is 0 when
 every check passes, 1 if any fails.
+
+### Configuration file and precedence
+
+Subcommands that accept `--network`, `--rpc-url`, `--secret-env`, or `--format`
+can read defaults from a JSON configuration file (`--config <path>`,
+`$SOROAUTH_CONFIG`, or `$XDG_CONFIG_HOME/soroauth/config.json` /
+`~/.config/soroauth/config.json`). A missing default config file is not an
+error; an explicit `--config` path that does not exist, or any unparseable file,
+is an error.
+
+Values resolve in strict precedence order:
+
+1. `flag` — explicit command-line flag (`--network`, `--rpc-url`,
+   `--secret-env`, `--format`)
+2. `env` — environment variable (`SOROAUTH_NETWORK`, `SOROAUTH_RPC_URL`,
+   `SOROAUTH_SECRET_ENV`, `SOROAUTH_FORMAT`)
+3. `file` — JSON configuration file (`network`, `rpc_url`, `secret_env`,
+   `format`)
+4. `default` — built-in default
+
+```json
+{
+  "network": "testnet",
+  "rpc_url": "https://soroban-testnet.stellar.org",
+  "secret_env": "SOROAUTH_SEED",
+  "format": "json"
+}
+```
+
+No secret value may be stored in the configuration file. `secret_env` accepts
+only the POSIX name of an environment variable (`[A-Za-z_][A-Za-z0-9_]*`); any
+Stellar strkey seed (`S...`), hex key, PEM block, or secret-bearing field name
+(`secret`, `seed`, `private_key`) is refused before the command runs, and the
+refused value is never echoed.
+
+### External signer (`--signer-cmd`)
+
+`soroauth sign` can delegate signing to an external helper executable via
+`--signer-cmd <path>` (with `--signer-timeout`, default `10s`) instead of
+`--secret-env`. The CLI invokes the helper once per target credential node and
+speaks the same JSON protocol on stdin/stdout that `remote/protocol.go` defines
+for HTTP:
+
+- **stdin (`remote.Request`)**:
+  `{"version": 1, "address": "G...", "preimage": "<base64 HashIdPreimage>", "payload": "<64-char hex sha256>"}`
+- **stdout (`remote.Response`)**: `{"signature": "<base64 XDR ScVal>"}` or
+  `{"error": "<reason>"}`
+
+Passing the full `preimage` alongside `payload` lets the helper inspect and
+recompute the SHA-256 digest or display the invocation details to a user before
+approving. The CLI validates the returned `signature` as a well-formed,
+non-placeholder `ScVal` (and verifies classic account `ScvVec` signatures over
+the payload) before writing it into the entry. Helper non-zero exit, timeout,
+and malformed output are reported as distinct errors, and no secret environment
+variables are inherited by the helper process.
 
 ### Cross-compile — build binaries for multiple targets
 
@@ -650,10 +631,14 @@ GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o soroauth-arm6
 
 `soroauth completions --shell bash|zsh|fish` prints a completion script for that
 shell on stdout. The scripts complete the subcommands, each subcommand's flags,
-and the enumerable flag values (`--shell`, `--format`, `--network`'s three named
-shorthands); fish additionally shows each flag's description in the tab menu.
-`--secret-env` is completed by name only — the shells never see or complete a
-variable's value.
+every enumerable flag value (`--shell`, `--format` on `payload`, `inspect`,
+`verify`, `diff`, `tree`, and `man`, and `--network`'s three named shorthands
+`testnet`, `futurenet`, `public` while still allowing literal passphrases), and
+dynamic credential addresses (`--address`, `--delegate`) extracted from an
+`--entry` already supplied on the command line; fish additionally shows each
+flag's description in the tab menu. Dynamic address completion parses XDR only
+and never executes entry contents or runs a signer. `--secret-env` is completed
+by name only — the shells never see or complete a variable's value.
 
 Install by shell:
 
@@ -814,8 +799,10 @@ if err != nil {
 
 entries := make([]xdr.SorobanAuthorizationEntry, 0, len(*sim.Results[0].AuthXDR))
 for _, encoded := range *sim.Results[0].AuthXDR {
-    var entry xdr.SorobanAuthorizationEntry
-    if err := xdr.SafeUnmarshalBase64(encoded, &entry); err != nil {
+    // Simulated entries are untrusted input, so decode them through the
+    // library's bounded decoder rather than the SDK's default.
+    entry, err := soroauth.DecodeAuthorizationEntry(encoded)
+    if err != nil {
         return err
     }
     entries = append(entries, entry)
