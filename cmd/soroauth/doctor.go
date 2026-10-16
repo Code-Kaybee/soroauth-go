@@ -36,8 +36,9 @@ runs a small set of checks and reports each as pass or fail:
 Nothing here ever inspects or prints a secret's value, only whether it is set.
 
 With --json, prints one JSON object: "checks" (one entry per check, each with
-"name", "pass" and an optional "detail") and an overall "ok" field. Nothing
-else is written to stdout in JSON mode.
+"name", "pass" and an optional "detail") and an overall "ok" field. A failed
+check also carries the versioned machine-readable error fields documented in
+README.md.
 
 exit codes:
   0  every check passed
@@ -62,8 +63,14 @@ type doctorCheck struct {
 // doctorReport is the full result of a doctor run, and the shape of its JSON
 // output.
 type doctorReport struct {
-	Checks []doctorCheck `json:"checks"`
-	OK     bool          `json:"ok"`
+	Checks        []doctorCheck `json:"checks"`
+	OK            bool          `json:"ok"`
+	Error         string        `json:"error,omitempty"`
+	SchemaVersion int           `json:"schema_version,omitempty"`
+	Code          string        `json:"code,omitempty"`
+	Message       string        `json:"message,omitempty"`
+	Field         string        `json:"field,omitempty"`
+	ExitCode      int           `json:"exit_code,omitempty"`
 }
 
 func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) string) error {
@@ -81,7 +88,7 @@ func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) stri
 	jsonFlag := flags.Bool("json", false, "output as JSON")
 
 	if err := flags.Parse(args); err != nil {
-		return newErrorf(ExitUsageError, "%w", err)
+		return writeJSONError(stdout, *jsonFlag, newErrorf(ExitUsageError, "%w", err))
 	}
 
 	checks := []doctorCheck{
@@ -101,6 +108,29 @@ func runDoctor(args []string, stdout, stderr io.Writer, getenv func(string) stri
 	report := doctorReport{Checks: checks, OK: ok}
 
 	if *jsonFlag {
+		if !ok {
+			fields := machineError(newErrorf(ExitGeneralError, "one or more doctor checks failed"))
+			fields.Code = "doctor_check_failed"
+			fields.Message = "one or more doctor checks failed"
+			for _, check := range checks {
+				if check.Pass {
+					continue
+				}
+				switch {
+				case check.Name == "network":
+					fields.Field = "--rpc-url"
+				case strings.HasPrefix(check.Name, "secret env:"):
+					fields.Field = "--secret-env"
+				}
+				break
+			}
+			report.Error = fields.Message
+			report.SchemaVersion = fields.SchemaVersion
+			report.Code = fields.Code
+			report.Message = fields.Message
+			report.Field = fields.Field
+			report.ExitCode = fields.ExitCode
+		}
 		enc := json.NewEncoder(stdout)
 		enc.SetEscapeHTML(false)
 		if err := enc.Encode(report); err != nil {

@@ -26,8 +26,8 @@ bash and zsh complete subcommands and flags; fish completes subcommands, flags
 and their descriptions. --secret-env is completed by name only: the shells
 never see or complete a variable's value.
 
-With --json, prints a JSON object with fields "shell" and "script"; on error, a
-JSON object with field "error" and exits non-zero.
+With --json, prints a JSON object with fields "shell" and "script"; on error,
+prints the versioned machine-readable error schema documented in README.md.
 
 exit codes:
   0  success
