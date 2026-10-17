@@ -70,6 +70,8 @@ func TestEveryJSONSubcommandUsesVersionedErrorSchema(t *testing.T) {
 	argsByCommand := map[string][]string{
 		"payload":       {"--entry", "not-base64", "--valid-until", "1", "--network", "testnet", "--json"},
 		"sign":          {"--json"},
+		"simulate":      {"--json"},
+		"submit":        {"--json"},
 		"delegates":     {"--json"},
 		"inspect":       {"--entry", "not-base64", "--json"},
 		"tree":          {"--entry", "not-base64", "--json"},

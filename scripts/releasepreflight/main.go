@@ -23,10 +23,12 @@ const (
 )
 
 var (
-	semverTagPattern = regexp.MustCompile(`^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$`)
-	imageTagPattern  = regexp.MustCompile(`ghcr\.io/soroauth/soroauth-go:(v[0-9]+\.[0-9]+\.[0-9]+)`)
-	versionPattern   = `v[0-9]+\.[0-9]+\.[0-9]+`
+	semverTagPattern      = regexp.MustCompile(`^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$`)
+	leadingVersionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+`)
+	versionPattern        = `v[0-9]+\.[0-9]+\.[0-9]+`
 )
+
+const imageTagPrefix = "ghcr.io/soroauth/soroauth-go:"
 
 type workflowRun struct {
 	ID         int64     `json:"id"`
@@ -137,13 +139,13 @@ func validateReleaseMetadata(root, tag string) error {
 	if err != nil {
 		return err
 	}
-	imageTags := imageTagPattern.FindAllStringSubmatch(readme, -1)
+	imageTags := findImageTags(readme)
 	if len(imageTags) == 0 {
 		return errors.New("README.md has no versioned GHCR image reference")
 	}
-	for _, match := range imageTags {
-		if match[1] != tag {
-			return fmt.Errorf("README.md refers to stale image tag %s; release tag is %s", match[1], tag)
+	for _, foundTag := range imageTags {
+		if foundTag != tag {
+			return fmt.Errorf("README.md refers to stale image tag %s; release tag is %s", foundTag, tag)
 		}
 	}
 
@@ -187,6 +189,20 @@ func validateReleaseMetadata(root, tag string) error {
 			exampleManifest.Dependencies["@soroauth/wasm"], version)
 	}
 	return nil
+}
+
+func findImageTags(content string) []string {
+	parts := strings.Split(content, imageTagPrefix)
+	if len(parts) < 2 {
+		return nil
+	}
+	var tags []string
+	for _, part := range parts[1:] {
+		if tag := leadingVersionPattern.FindString(part); tag != "" {
+			tags = append(tags, tag)
+		}
+	}
+	return tags
 }
 
 func readFile(root, path string) (string, error) {
