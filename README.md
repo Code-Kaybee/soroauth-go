@@ -54,8 +54,9 @@ go install github.com/soroauth/soroauth-go/cmd/soroauth@latest
 ```
 
 Requires Go 1.25.0 or later, and `github.com/stellar/go-stellar-sdk` v0.7.3 or
-later. Which SDK versions that promise covers, and how the pin moves, is stated
-in [docs/sdk-support.md](docs/sdk-support.md).
+later. As checked on 2026-10-17, the root module pins v0.7.3; which newer SDK
+versions that promise covers, and how the pin moves, is stated in
+[docs/sdk-support.md](docs/sdk-support.md).
 
 ## Common tasks
 
@@ -240,177 +241,27 @@ fails a run instead of going unnoticed.
 Every subcommand that produces output accepts `--json` to emit a single JSON
 object (or, for `tree`, either the JSON report or one of its two text renderings
 — see below) on stdout. On success the object carries the result fields; on
-failure it carries a versioned error schema. Nothing else is written to stdout
-in JSON mode, so scripts can safely pipe the output to `jq` without stripping
-usage text. `tui` is the one exception: it is an interactive terminal program,
-not something a script drives, so it has no `--json` mode.
+failure it carries an `error` field. Nothing else is written to stdout in JSON
+mode, so scripts can safely pipe the output to `jq` without stripping usage
+text. `tui` is the one exception: it is an interactive terminal program, not
+something a script drives, so it has no `--json` mode.
 
-| subcommand      | success fields                                                                                                                              | failure field                              |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `payload`       | `preimage`, `payload`                                                                                                                       | `error`                                    |
-| `sign`          | `signed_entry`                                                                                                                              | `error`                                    |
-| `simulate`      | `entries` (with `operation_index`, `entry_index`, `arm`, `entry` each), `min_resource_fee`, `transaction_data`, `latest_ledger`, `envelope` | `error`                                    |
-| `submit`        | `hash`, `status`, `ledger`, `arm` (plus `result_xdr` and `diagnostic_events` when the transaction failed)                                   | `error`                                    |
-| `delegates`     | `wrapped_entry`                                                                                                                             | `error`                                    |
-| `inspect`       | (the `EntryInfo` struct — this was already `inspect`'s only output; `--json` is accepted for consistency and does not change it)            | `error`                                    |
-| `verify`        | the report: `credential_type`, `address`, `valid_until_ledger`, `verified`, and `nodes` with a `verdict` per credential node                | `error`                                    |
-| `tree`          | (the `EntryInfo` struct, same shape as `inspect`; without `--json` it prints an ASCII or DOT rendering instead)                             | `error`                                    |
-| `doctor`        | `checks`, `ok`                                                                                                                              | structured error fields when a check fails |
-| `cross-compile` | `target`, `size`, `sha256` (one per line)                                                                                                   | `error`                                    |
-| `completions`   | `shell`, `script`                                                                                                                           | `error`                                    |
-| `man`           | `format`, `page`                                                                                                                            | `error`                                    |
-
-### Machine-readable errors
-
-With `--json`, a failed command emits `schema_version`, `code`, `message`,
-`field` and `exit_code` alongside the compatibility `error` string. The schema
-version is `1`; `error` is the same safe, stable text as `message`. For batch
-commands these fields accompany each failed entry in the result array. The
-numeric `exit_code` equals the process exit status for a single failure, or the
-first failed entry in batch mode. `field` is the input flag when one is
-identifiable and an empty string for command-level failures. Messages never
-include an entry, a secret, or a key.
-
-Codes for library sentinel errors are explicit and stable:
-
-| Sentinel                                | Code                                    |
-| --------------------------------------- | --------------------------------------- |
-| `ErrSourceAccountCredentials`           | `source_account_credentials`            |
-| `ErrUnsupportedCredentials`             | `unsupported_credentials`               |
-| `ErrNoMatchingCredentialNode`           | `no_matching_credential_node`           |
-| `ErrDuplicateDelegate`                  | `duplicate_delegate`                    |
-| `ErrSignatureMismatch`                  | `signature_mismatch`                    |
-| `ErrMissingSigner`                      | `missing_signer`                        |
-| `ErrAlreadySigned`                      | `already_signed`                        |
-| `ErrInvalidExpiration`                  | `invalid_expiration`                    |
-| `ErrTooManySignatures`                  | `too_many_signatures`                   |
-| `ErrDecodeLimit`                        | `decode_limit`                          |
-| `ErrNoInvokeOperation`                  | `no_invoke_operation`                   |
-| `ErrUnsupportedEnvelope`                | `unsupported_envelope`                  |
-| `ErrUnsignedCredentialNode`             | `unsigned_credential_node`              |
-| `ErrDelegatePlanUnmatched`              | `delegate_plan_unmatched`               |
-| `ErrNonceAlreadyReserved`               | `nonce_already_reserved`                |
-| `ErrWebAuthnMalformedJSON`              | `webauthn_malformed_json`               |
-| `ErrWebAuthnMissingField`               | `webauthn_missing_field`                |
-| `ErrWebAuthnMalformedField`             | `webauthn_malformed_field`              |
-| `ErrWebAuthnTruncatedAuthenticatorData` | `webauthn_truncated_authenticator_data` |
-| `ErrWebAuthnChallengeMismatch`          | `webauthn_challenge_mismatch`           |
-| `ErrSignerAddressMismatch`              | `signer_address_mismatch`               |
-| `ErrVaultUnauthorized`                  | `vault_unauthorized`                    |
-| `ErrVaultKeyNotFound`                   | `vault_key_not_found`                   |
-| `ErrVaultKeyType`                       | `vault_key_type`                        |
-| `ErrLedgerUnavailable`                  | `ledger_unavailable`                    |
-| `ErrLedgerLocked`                       | `ledger_locked`                         |
-| `ErrLedgerWrongApp`                     | `ledger_wrong_app`                      |
-| `ErrLedgerBlindSigningDisabled`         | `ledger_blind_signing_disabled`         |
-| `ErrLedgerDenied`                       | `ledger_denied`                         |
-
-Errors without a sentinel use `usage_error`, `signing_refused`,
-`verification_failed` or `command_failed`, matching the CLI exit-code class. An
-unsuccessful `doctor` report uses `doctor_check_failed` and exit code `1`. For
-example:
-
-```json
-{"schema_version":1,"code":"invalid_expiration","message":"invalid signature expiration ledger","field":"--valid-until","exit_code":4,"error":"invalid signature expiration ledger"}
-```
-
-The flag reference below is generated from the CLI command specifications. The
-test suite fails if it drifts from the flags the subcommands parse.
-
-<!-- BEGIN GENERATED CLI FLAGS -->
-
-| Command       | Flag                | Value   | Description                                                                                           |
-| ------------- | ------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
-| payload       | --config            | <value> | path to CLI configuration file                                                                        |
-| payload       | --entry             | <value> | authorization entry or transaction envelope, as base64 XDR                                            |
-| payload       | --valid-until       | <value> | the last ledger at which the signature is valid                                                       |
-| payload       | --valid-for         | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
-| payload       | --rpc-url           | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
-| payload       | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
-| payload       | --json              | —       | output as JSON                                                                                        |
-| sign          | --config            | <value> | path to CLI configuration file                                                                        |
-| sign          | --entry             | <value> | authorization entry or transaction envelope, as base64 XDR                                            |
-| sign          | --entries           | <value> | a file of entries to sign, one base64 entry per line, or - for stdin                                  |
-| sign          | --valid-until       | <value> | the last ledger at which the signature is valid                                                       |
-| sign          | --valid-for         | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
-| sign          | --rpc-url           | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
-| sign          | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
-| sign          | --secret-env        | <value> | name of the environment variable holding the seed                                                     |
-| sign          | --assertion         | <value> | path to a WebAuthn assertion JSON file, or - for stdin                                                |
-| sign          | --signer-cmd        | <value> | path to an external signer executable speaking the remote protocol over stdin/stdout                  |
-| sign          | --signer-timeout    | <value> | timeout for the external signer executable                                                            |
-| sign          | --for               | <value> | credential node to sign, when it is not the signer's own address                                      |
-| sign          | --json              | —       | output as JSON                                                                                        |
-| simulate      | --entry             | <value> | the transaction envelope to simulate, as base64 XDR                                                   |
-| simulate      | --rpc-url           | <value> | RPC endpoint to simulate against (default $SOROAUTH_RPC_URL)                                          |
-| simulate      | --use-upgraded-auth | —       | ask the host to record the address-bound V2 arm (best-effort)                                         |
-| simulate      | --timeout           | <value> | how long to wait for the simulation                                                                   |
-| simulate      | --json              | —       | output as JSON                                                                                        |
-| submit        | --entry             | <value> | the signed transaction envelope, as base64 XDR                                                        |
-| submit        | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
-| submit        | --secret-env        | <value> | name of the environment variable holding the source account's seed                                    |
-| submit        | --rpc-url           | <value> | RPC endpoint to submit to (default $SOROAUTH_RPC_URL)                                                 |
-| submit        | --allow-unsigned    | —       | submit even though an address entry is unsigned (the host will refuse it)                             |
-| submit        | --timeout           | <value> | how long to wait for the enforcing pass, the send and the poll                                        |
-| submit        | --json              | —       | output as JSON                                                                                        |
-| delegates     | --config            | <value> | path to CLI configuration file                                                                        |
-| delegates     | --entry             | <value> | the authorization entry, as base64 XDR                                                                |
-| delegates     | --valid-until       | <value> | the last ledger at which the signatures are valid                                                     |
-| delegates     | --valid-for         | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
-| delegates     | --rpc-url           | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
-| delegates     | --delegate          | <value> | a delegate address; repeat for several                                                                |
-| delegates     | --nested-json       | <value> | JSON string defining nested delegate tree                                                             |
-| delegates     | --json              | —       | output as JSON                                                                                        |
-| inspect       | --config            | <value> | path to CLI configuration file                                                                        |
-| inspect       | --entry             | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
-| inspect       | --entries           | <value> | a file of entries to inspect, one base64 entry per line, or - for stdin                               |
-| inspect       | --json              | —       | accepted for consistency; inspect's output is always JSON                                             |
-| tree          | --config            | <value> | path to CLI configuration file                                                                        |
-| tree          | --entry             | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
-| tree          | --format            | <value> | tree rendering: ascii or dot                                                                          |
-| tree          | --json              | —       | output structured JSON instead of a rendering                                                         |
-| tui           | --config            | <value> | path to CLI configuration file                                                                        |
-| tui           | --entry             | <value> | base64-encoded authorization entry (required)                                                         |
-| tui           | --valid-until       | <value> | signature expiration ledger (required)                                                                |
-| tui           | --network           | <value> | testnet, futurenet, public, or a literal passphrase (required)                                        |
-| tui           | --secret-env        | <value> | name of environment variable holding the secret seed (required)                                       |
-| tui           | --for               | <value> | target address to sign for (optional)                                                                 |
-| doctor        | --config            | <value> | path to CLI configuration file                                                                        |
-| doctor        | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
-| doctor        | --rpc-url           | <value> | URL to check network reachability against                                                             |
-| doctor        | --secret-env        | <value> | name of an environment variable whose presence to check                                               |
-| doctor        | --format            | <value> | output format: text or json                                                                           |
-| doctor        | --timeout           | <value> | timeout for the network check                                                                         |
-| doctor        | --json              | —       | output as JSON                                                                                        |
-| cross-compile | --json              | —       | emit results as JSON (one object per line)                                                            |
-| cross-compile | --targets           | <value> | comma-separated GOOS/GOARCH pairs (default: all)                                                      |
-| cross-compile | --output-dir        | <value> | directory to write binaries (default: stdout only)                                                    |
-| verify        | --config            | <value> | path to CLI configuration file                                                                        |
-| verify        | --entry             | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
-| verify        | --entries           | <value> | a file of entries to verify, one base64 entry per line, or - for stdin                                |
-| verify        | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
-| verify        | --valid-until       | <value> | assert the expiration the entry carries (optional)                                                    |
-| verify        | --allow-unsigned    | —       | accept unsigned nodes (a Void top-level node of a delegates entry is legitimate under CAP-71-01)      |
-| verify        | --json              | —       | output as JSON                                                                                        |
-| diff          | --config            | <value> | path to CLI configuration file                                                                        |
-| diff          | --before            | <value> | the first authorization entry, as base64 XDR                                                          |
-| diff          | --after             | <value> | the second authorization entry, as base64 XDR                                                         |
-| diff          | --before-entries    | <value> | a file of entries to compare, one base64 entry per line, or - for stdin; paired with --after-entries  |
-| diff          | --after-entries     | <value> | a file of entries to compare, one base64 entry per line, or - for stdin; paired with --before-entries |
-| diff          | --json              | —       | output as JSON                                                                                        |
-| completions   | --shell             | <value> | which shell: bash, zsh, or fish                                                                       |
-| completions   | --json              | —       | output as JSON                                                                                        |
-| man           | --out               | <value> | write the page to this path instead of stdout                                                         |
-| man           | --json              | —       | output as JSON                                                                                        |
-| wasm-budget   | --out               | <value> | path to the wasm artifact to measure                                                                  |
-| wasm-budget   | --budget            | <value> | maximum allowed size in bytes                                                                         |
-| wasm-budget   | --prev-size         | <value> | previous release's size, for a delta                                                                  |
-| wasm-budget   | --build-cmd         | <value> | command to build the artifact before measuring                                                        |
-| wasm-budget   | --json              | —       | output the result as JSON                                                                             |
-| soroauth      | --help              | —       | Print this help                                                                                       |
-| soroauth      | --version           | —       | Print the build version, commit and Go version                                                        |
-
-<!-- END GENERATED CLI FLAGS -->
+| subcommand      | success fields                                                                                                                              | failure field                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `payload`       | `preimage`, `payload`                                                                                                                       | `error`                                             |
+| `sign`          | `signed_entry`                                                                                                                              | `error`                                             |
+| `simulate`      | `entries` (with `operation_index`, `entry_index`, `arm`, `entry` each), `min_resource_fee`, `transaction_data`, `latest_ledger`, `envelope` | `error`                                             |
+| `submit`        | `hash`, `status`, `ledger`, `arm` (plus `result_xdr` and `diagnostic_events` when the transaction failed)                                   | `error`                                             |
+| `delegates`     | `wrapped_entry`                                                                                                                             | `error`                                             |
+| `inspect`       | (the `EntryInfo` struct — this was already `inspect`'s only output; `--json` is accepted for consistency and does not change it)            | `error`                                             |
+| `diff`          | `identical`, `payload_changed`, `signatures_changed`, `stale_signatures`, `changes`, `summary`                                              | `error`                                             |
+| `verify`        | the report: `credential_type`, `address`, `valid_until_ledger`, `verified`, and `nodes` with a `verdict` per credential node                | `error`                                             |
+| `tree`          | (the `EntryInfo` struct, same shape as `inspect`; without `--json` it prints an ASCII or DOT rendering instead)                             | `error`                                             |
+| `doctor`        | `checks`, `ok`                                                                                                                              | (checks carry their own `pass`/`detail`; see below) |
+| `cross-compile` | `target`, `size`, `sha256` (one per line)                                                                                                   | `error`                                             |
+| `completions`   | `shell`, `script`                                                                                                                           | `error`                                             |
+| `man`           | `format`, `page`                                                                                                                            | `error`                                             |
+| `wasm-budget`   | `size`, `budget`, `exceeded`, and optional `previous_size` and `delta`                                                                      | `error`                                             |
 
 ### Worked invocation — JSON output
 
@@ -1109,7 +960,8 @@ protocol versions whose host cannot emit AddressV2.
 ## Protocol version support
 
 Each arm's CAP states the protocol version it was introduced in; a network
-running an older protocol cannot emit or accept that arm at all.
+running an older protocol cannot emit or accept that arm at all. The
+introduction versions below are from the cited CAPs, checked on 2026-10-17.
 
 | Arm                                          | Introduced in | Source    |
 | -------------------------------------------- | ------------- | --------- |
@@ -1225,28 +1077,32 @@ doc comment.
 
 ## CAP-85 / Protocol 28
 
-As of this release (using `github.com/stellar/go-stellar-sdk` v0.7.3), **no
-changes are required** for CAP-85 / Protocol 28 support.
+This assessment was checked on 2026-10-17 and applies to the root module's
+`github.com/stellar/go-stellar-sdk` v0.7.3 pin. That SDK version already
+includes Protocol 28 XDR support: its
+[changelog](https://github.com/stellar/go-stellar-sdk/blob/v0.7.3/CHANGELOG.md)
+records CAP-85 and CAP-83 support in v0.7.0. The earlier statement that v0.7.3
+predates Protocol 28 was incorrect.
 
 Evidence:
 
-- The Go SDK v0.7.3 (released 2026-08-06) does not contain Protocol 28 / CAP-85
-  helpers. Its `go.mod` declares `go 1.25.0` and the XDR types are from the
-  `go-xdr` module at `v0.0.0-20260806060815-dc590f17552a`, which predates
-  Protocol 28.
-- Testnet is on Protocol 28 (confirmed via `stellar.expert` and RPC `getLedger`
-  responses), but the authorization entry wire format
-  (`SorobanAuthorizationEntry`, `SorobanCredentials`,
-  `SorobanDelegateSignature`) has not changed in CAP-85. CAP-85 (Protocol 28)
-  introduces new _host functions_ and _diagnostic events_, not new credential
-  arms or preimage variants for Soroban authorization.
-- The soroauth codebase has been run against live testnet (see
-  [e2e/RESULTS.md](e2e/RESULTS.md)) with no protocol-level failures.
+- [CAP-85](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0085.md)
+  introduces externally managed contract executables and adds their type to
+  contract-creation authorization context. It does not add a Soroban credential
+  arm or a signing-preimage variant, so soroauth's authorization preimage
+  construction needs no CAP-85-specific change.
+- The live testnet RPC's `getNetwork` response reported `protocolVersion: 29` on
+  2026-10-17. The e2e transactions in [e2e/RESULTS.md](e2e/RESULTS.md) were
+  recorded on 2026-10-17 against that network version; those results are a dated
+  snapshot, not a promise about a future network state.
+- The SDK pin is v0.7.3, and `go.mod` selects `go-xdr`
+  v0.0.0-20260806060815-dc590f17552a. The authorization signing implementation
+  is still covered by the pinned `@stellar/stellar-sdk@17.1.0` vectors; the live
+  testnet evidence is recorded separately in the dated e2e results.
 
-When the Go SDK releases Protocol 28 helpers (expected in a future minor
-version), this section will be updated. At that time, if the wire format
-changes, a golden vector will be added and an e2e scenario will be run. If
-nothing changes, this section will explicitly state that.
+Re-check this assessment when the Go SDK pin changes or a later CAP changes
+authorization-entry XDR or the signing preimage. A change to either requires a
+new golden vector and, when protocol behavior changes, a live e2e run.
 
 ## Differences from the JS SDK
 
@@ -1330,7 +1186,8 @@ three-party delegate handoff — including the shared-expiration rule — see
 ## Proven on testnet
 
 Every claim below is backed by a transaction that exists on chain. Full detail,
-including raw host errors, is in [e2e/RESULTS.md](e2e/RESULTS.md).
+including raw host errors, is in [e2e/RESULTS.md](e2e/RESULTS.md). These results
+were recorded on 2026-10-17; the RPC reported protocol version 29 for that run.
 
 | Scenario                                            | Result                  | Transaction                                                                                                                |
 | --------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -1348,17 +1205,19 @@ Offline, the golden vectors generated by `@stellar/stellar-sdk@17.1.0` assert
 that soroauth's preimage, payload hash and final signed entry are byte-identical
 to the reference, and CI regenerates them on every push to catch drift. That
 agreement is cross-checked by two other implementations: the Python
-`stellar-sdk` recomputes every vector's preimage and payload in CI
-(`make parity`), and the Rust `stellar-xdr` crate — the XDR implementation the
-Soroban host itself uses — does the same (`make parity-rust`), so a bug shared
-by the Go and JS implementations cannot hide in the vectors.
+`stellar-sdk` v16.1.0 recomputes every vector's preimage and payload in CI
+(`make parity`), and the Rust `stellar-xdr` v28.0.0 crate — the XDR
+implementation the Soroban host itself uses — does the same
+(`make parity-rust`). These parity pins were checked on 2026-10-17, so a bug
+shared by the Go and JS implementations cannot hide in the vectors.
 
 Fixed vectors only cover the cases someone thought of, so there is also a
 differential fuzzing harness: `make differential` generates a random corpus of
 structurally valid entries — every credentials arm, delegate trees of random
 depth, sub-invocation trees, both nonce signs and the `int64` edges — and
-requires Go, JS and Python to agree on every payload. A divergence is a release
-blocker, not a test flake. See
+requires the Go SDK v0.7.3, JS SDK v17.1.0 and Python `stellar-sdk` v16.1.0
+references pinned on 2026-10-17 to agree on every payload. A divergence is a
+release blocker, not a test flake. See
 [testdata/differential/README.md](testdata/differential/README.md).
 
 What that agreement does and does not establish — and what no offline suite can
