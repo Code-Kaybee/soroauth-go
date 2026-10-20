@@ -54,10 +54,16 @@ The CLI:
 go install github.com/soroauth/soroauth-go/cmd/soroauth@latest
 ```
 
-Requires Go 1.25.0 or later, and `github.com/stellar/go-stellar-sdk` v0.7.3 or
+Requires Go 1.26.0 or later, and `github.com/stellar/go-stellar-sdk` v0.7.3 or
 later. As checked on 2026-10-17, the root module pins v0.7.3; which newer SDK
 versions that promise covers, and how the pin moves, is stated in
 [docs/sdk-support.md](docs/sdk-support.md).
+
+The supported Go floor is the one `go.mod` declares — 1.25.0 today. The floor
+policy is the same one [docs/sdk-support.md](docs/sdk-support.md) applies to the
+SDK pin: it moves only when a dependency requires a newer Go version, and never
+on a schedule of its own. Check `go.mod` for the currently supported floor
+rather than relying on a version number quoted here.
 
 ## Common tasks
 
