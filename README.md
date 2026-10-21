@@ -1258,6 +1258,104 @@ It is intentionally narrow:
 This is a deliberate boundary: soroauth signs the protocol-defined bytes and
 reports the structure; it does not replace the rest of the Stellar toolchain.
 
+## CLI flag reference
+
+<!-- BEGIN GENERATED CLI FLAGS -->
+
+| Command       | Flag                | Value   | Description                                                                                           |
+| ------------- | ------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| payload       | --config            | <value> | path to CLI configuration file                                                                        |
+| payload       | --entry             | <value> | authorization entry or transaction envelope, as base64 XDR                                            |
+| payload       | --valid-until       | <value> | the last ledger at which the signature is valid                                                       |
+| payload       | --valid-for         | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
+| payload       | --rpc-url           | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
+| payload       | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
+| payload       | --json              | —       | output as JSON                                                                                        |
+| sign          | --config            | <value> | path to CLI configuration file                                                                        |
+| sign          | --entry             | <value> | authorization entry or transaction envelope, as base64 XDR                                            |
+| sign          | --entries           | <value> | a file of entries to sign, one base64 entry per line, or - for stdin                                  |
+| sign          | --valid-until       | <value> | the last ledger at which the signature is valid                                                       |
+| sign          | --valid-for         | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
+| sign          | --rpc-url           | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
+| sign          | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
+| sign          | --secret-env        | <value> | name of the environment variable holding the seed                                                     |
+| sign          | --assertion         | <value> | path to a WebAuthn assertion JSON file, or - for stdin                                                |
+| sign          | --signer-cmd        | <value> | path to an external signer executable speaking the remote protocol over stdin/stdout                  |
+| sign          | --signer-timeout    | <value> | timeout for the external signer executable                                                            |
+| sign          | --for               | <value> | credential node to sign, when it is not the signer's own address                                      |
+| sign          | --json              | —       | output as JSON                                                                                        |
+| simulate      | --entry             | <value> | the transaction envelope to simulate, as base64 XDR                                                   |
+| simulate      | --rpc-url           | <value> | RPC endpoint to simulate against (default $SOROAUTH_RPC_URL)                                          |
+| simulate      | --use-upgraded-auth | —       | ask the host to record the address-bound V2 arm (best-effort)                                         |
+| simulate      | --timeout           | <value> | how long to wait for the simulation                                                                   |
+| simulate      | --json              | —       | output as JSON                                                                                        |
+| submit        | --entry             | <value> | the signed transaction envelope, as base64 XDR                                                        |
+| submit        | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
+| submit        | --secret-env        | <value> | name of the environment variable holding the source account's seed                                    |
+| submit        | --rpc-url           | <value> | RPC endpoint to submit to (default $SOROAUTH_RPC_URL)                                                 |
+| submit        | --allow-unsigned    | —       | submit even though an address entry is unsigned (the host will refuse it)                             |
+| submit        | --timeout           | <value> | how long to wait for the enforcing pass, the send and the poll                                        |
+| submit        | --json              | —       | output as JSON                                                                                        |
+| delegates     | --config            | <value> | path to CLI configuration file                                                                        |
+| delegates     | --entry             | <value> | the authorization entry, as base64 XDR                                                                |
+| delegates     | --valid-until       | <value> | the last ledger at which the signatures are valid                                                     |
+| delegates     | --valid-for         | <value> | the signature lifetime in ledgers, resolved against the current ledger (needs --rpc-url)              |
+| delegates     | --rpc-url           | <value> | RPC endpoint used to resolve --valid-for (default $SOROAUTH_RPC_URL)                                  |
+| delegates     | --delegate          | <value> | a delegate address; repeat for several                                                                |
+| delegates     | --nested-json       | <value> | JSON string defining nested delegate tree                                                             |
+| delegates     | --json              | —       | output as JSON                                                                                        |
+| inspect       | --config            | <value> | path to CLI configuration file                                                                        |
+| inspect       | --entry             | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
+| inspect       | --entries           | <value> | a file of entries to inspect, one base64 entry per line, or - for stdin                               |
+| inspect       | --json              | —       | accepted for consistency; inspect's output is always JSON                                             |
+| tree          | --config            | <value> | path to CLI configuration file                                                                        |
+| tree          | --entry             | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
+| tree          | --format            | <value> | tree rendering: ascii or dot                                                                          |
+| tree          | --json              | —       | output structured JSON instead of a rendering                                                         |
+| tui           | --config            | <value> | path to CLI configuration file                                                                        |
+| tui           | --entry             | <value> | base64-encoded authorization entry (required)                                                         |
+| tui           | --valid-until       | <value> | signature expiration ledger (required)                                                                |
+| tui           | --network           | <value> | testnet, futurenet, public, or a literal passphrase (required)                                        |
+| tui           | --secret-env        | <value> | name of environment variable holding the secret seed (required)                                       |
+| tui           | --for               | <value> | target address to sign for (optional)                                                                 |
+| doctor        | --config            | <value> | path to CLI configuration file                                                                        |
+| doctor        | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
+| doctor        | --rpc-url           | <value> | URL to check network reachability against                                                             |
+| doctor        | --secret-env        | <value> | name of an environment variable holding the signing seed; checked for presence and key control        |
+| doctor        | --address           | <value> | account the signer is meant to sign for                                                               |
+| doctor        | --format            | <value> | output format: text or json                                                                           |
+| doctor        | --timeout           | <value> | timeout for the network check                                                                         |
+| doctor        | --json              | —       | output as JSON                                                                                        |
+| cross-compile | --json              | —       | emit results as JSON (one object per line)                                                            |
+| cross-compile | --targets           | <value> | comma-separated GOOS/GOARCH pairs (default: all)                                                      |
+| cross-compile | --output-dir        | <value> | directory to write binaries (default: stdout only)                                                    |
+| verify        | --config            | <value> | path to CLI configuration file                                                                        |
+| verify        | --entry             | <value> | the authorization entry or transaction envelope, as base64 XDR                                        |
+| verify        | --entries           | <value> | a file of entries to verify, one base64 entry per line, or - for stdin                                |
+| verify        | --network           | <value> | testnet, futurenet, public, or a literal network passphrase                                           |
+| verify        | --valid-until       | <value> | assert the expiration the entry carries (optional)                                                    |
+| verify        | --allow-unsigned    | —       | accept unsigned nodes (a Void top-level node of a delegates entry is legitimate under CAP-71-01)      |
+| verify        | --json              | —       | output as JSON                                                                                        |
+| diff          | --config            | <value> | path to CLI configuration file                                                                        |
+| diff          | --before            | <value> | the first authorization entry, as base64 XDR                                                          |
+| diff          | --after             | <value> | the second authorization entry, as base64 XDR                                                         |
+| diff          | --before-entries    | <value> | a file of entries to compare, one base64 entry per line, or - for stdin; paired with --after-entries  |
+| diff          | --after-entries     | <value> | a file of entries to compare, one base64 entry per line, or - for stdin; paired with --before-entries |
+| diff          | --json              | —       | output as JSON                                                                                        |
+| completions   | --shell             | <value> | which shell: bash, zsh, or fish                                                                       |
+| completions   | --json              | —       | output as JSON                                                                                        |
+| man           | --out               | <value> | write the page to this path instead of stdout                                                         |
+| man           | --json              | —       | output as JSON                                                                                        |
+| wasm-budget   | --out               | <value> | path to the wasm artifact to measure                                                                  |
+| wasm-budget   | --budget            | <value> | maximum allowed size in bytes                                                                         |
+| wasm-budget   | --prev-size         | <value> | previous release's size, for a delta                                                                  |
+| wasm-budget   | --build-cmd         | <value> | command to build the artifact before measuring                                                        |
+| wasm-budget   | --json              | —       | output the result as JSON                                                                             |
+| soroauth      | --help              | —       | Print this help                                                                                       |
+| soroauth      | --version           | —       | Print the build version, commit and Go version                                                        |
+
+<!-- END GENERATED CLI FLAGS -->
+
 ## Status
 
 **v0.1.0. Unaudited.** The wire format is fixed by the protocol and pinned by

@@ -54,6 +54,14 @@ var sentinelJSONErrors = []sentinelJSONError{
 	{soroauth.ErrLedgerWrongApp, "ledger_wrong_app", "--secret-env", "ledger device is not running the Stellar app"},
 	{soroauth.ErrLedgerBlindSigningDisabled, "ledger_blind_signing_disabled", "--secret-env", "blind signing is disabled in the Ledger Stellar app settings"},
 	{soroauth.ErrLedgerDenied, "ledger_denied", "--secret-env", "the request was rejected on the ledger device"},
+	{soroauth.ErrAttestationMalformed, "attestation_malformed", "--attestation", "webauthn attestation is malformed"},
+	{soroauth.ErrAttestationInvalid, "attestation_invalid", "--attestation", "webauthn attestation failed verification"},
+	{soroauth.ErrAttestationUnsupportedFormat, "attestation_unsupported_format", "--attestation", "webauthn attestation format or algorithm is not supported"},
+	{soroauth.ErrPolicyRefusal, "policy_refusal", "--secret-env", "signing refused by policy"},
+	{soroauth.ErrSignerTransient, "signer_transient", "--secret-env", "transient signer failure"},
+	{soroauth.ErrChainExhausted, "chain_exhausted", "--secret-env", "every signer in the chain failed"},
+	{soroauth.ErrQuorumNotMet, "quorum_not_met", "--secret-env", "signer quorum was not met"},
+	{soroauth.ErrQuorumDisagreement, "quorum_disagreement", "--secret-env", "signers disagree on the signature"},
 }
 
 func machineError(err error) jsonErrorFields {
